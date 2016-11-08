@@ -83,8 +83,10 @@ public class MyInterpreter {
 	private class ColumnCreateData {
 		public String columnName;
 		public DBType columnType;
-		public ColumnCreateData(String colName, String typeStr, int typeVal) {
+		public boolean notNull;
+		public ColumnCreateData(String colName, String typeStr, int typeVal, boolean isNotNull) {
 			columnName = colName;
+			notNull = isNotNull;
 			if(typeStr.equals("char"))
 				columnType = new DBType(typeStr, typeVal);
 			else
@@ -117,8 +119,8 @@ public class MyInterpreter {
 		createFKQueue.clear();
 	}
 	
-	public void createTable_EnqueueColumn(String colName, String typeStr, int typeVal) {
-		ColumnCreateData col = new ColumnCreateData(colName, typeStr, typeVal);
+	public void createTable_EnqueueColumn(String colName, String typeStr, int typeVal, boolean isNotNull) {
+		ColumnCreateData col = new ColumnCreateData(colName, typeStr, typeVal, isNotNull);
 		createColumnQueue.add(col);
 	}
 	
