@@ -1,0 +1,12 @@
+lib/
+db/
+bin/
+.settings/
+
+src/ParseException.java
+src/SimpleCharStream.java
+src/SimpleDBMSParser*.java
+src/Token*.java
+
+.classpath
+.project
