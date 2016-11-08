@@ -70,3 +70,20 @@ class CharLengthError extends DBError {
 		super("Char length should be over 0");
 	}
 }
+
+// Custom Exceptions
+class DuplicateForeignKeyDefError extends DBError { 
+	// e.g. fk (id, addr) references t(a_id, a_addr), fk (id, addr) references tt(b_id, b_addr)
+	//		=> A foreign key (id, addr) is defined redundantly.
+	public DuplicateForeignKeyDefError() {
+		super("Create table has failed: foreign key definition is duplicated for a foreign key");
+	}
+}
+
+class ReferenceOwnTableError extends DBError {
+	// e.g. create table foo ( ..., fk (id, addr) references foo(other_id, other_addr), ... );
+	//		=> A foreign key (id, addr) references its own table 'foo'.
+	public ReferenceOwnTableError() {
+		super("Create table has failed: foreign key references its own table");
+	}
+}
