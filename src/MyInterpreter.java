@@ -1,6 +1,7 @@
 // imports
 /* BerkelyDB classes */
 import java.io.File;
+import java.util.ArrayList;
 
 import com.sleepycat.je.Database;
 import com.sleepycat.je.DatabaseException;
@@ -15,6 +16,20 @@ public class MyInterpreter {
 	
 	public Environment myDBEnv;
 	public Database tableListDB;
+	
+	private static DatabaseConfig _dbOpenOrCreateCfg;
+	private static DatabaseConfig _dbCreateOnlyCfg;
+	private static DatabaseConfig _dbOpenOnlyCfg;
+	
+	static {
+		// DatabaseConfigs initiallization.
+		_dbOpenOrCreateCfg = new DatabaseConfig();
+		_dbOpenOrCreateCfg.setAllowCreate(true);
+		_dbCreateOnlyCfg = new DatabaseConfig();
+		_dbCreateOnlyCfg.setAllowCreate(true);
+		_dbCreateOnlyCfg.setExclusiveCreate(true);
+		_dbOpenOnlyCfg = new DatabaseConfig();
+	}
 
 	private MyInterpreter() {
 	    // Open Database Environment or if not exists, create one.
@@ -23,10 +38,7 @@ public class MyInterpreter {
 	    myDBEnv = new Environment(new File("db/"), envConfig);
 	    
 	    // Open Table List Database or if not exists, create one.
-	    DatabaseConfig dbConfig = new DatabaseConfig();
-	    dbConfig.setAllowCreate(true);
-	    tableListDB = myDBEnv.openDatabase(null, "TableList", dbConfig);
-	    
+	    tableListDB = myDBEnv.openDatabase(null, "SCHEMA_TableList", _dbOpenOrCreateCfg);
 	}
 	 
 	public static MyInterpreter getInstance() {
@@ -35,6 +47,24 @@ public class MyInterpreter {
 		return _instance;
 	}
 	
+	public boolean createTable() {
+		// TODO implement proper routine handling 'create table'
+		return false;
+	}
 	
-
+	public boolean dropTable() {
+		// TODO implement proper routine handling 'drop table'
+		return false;
+	}
+	
+	public boolean desc() {
+		// TODO implement proper routine handling 'desc'
+		return false;
+	}
+	
+	public boolean showTables() {
+		// TODO implement proper routine handling 'show tables'
+		return false;
+	}
+	
 }
