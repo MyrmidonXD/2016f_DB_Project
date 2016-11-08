@@ -1,7 +1,7 @@
 // imports
 /* BerkelyDB classes */
 import java.io.File;
-import java.util.ArrayList;
+import java.util.*;
 
 import com.sleepycat.je.Database;
 import com.sleepycat.je.DatabaseException;
@@ -30,6 +30,11 @@ public class MyInterpreter {
 		_dbCreateOnlyCfg.setExclusiveCreate(true);
 		_dbOpenOnlyCfg = new DatabaseConfig();
 	}
+	
+	// Queues used in Create Table
+	private LinkedList<ColumnCreateData> createColumnQueue;
+	private LinkedList<PKCreateData> createPKQueue;
+	private LinkedList<FKCreateData> createFKQueue;
 
 	private MyInterpreter() {
 	    // Open Database Environment or if not exists, create one.
@@ -39,6 +44,12 @@ public class MyInterpreter {
 	    
 	    // Open Table List Database or if not exists, create one.
 	    tableListDB = myDBEnv.openDatabase(null, "SCHEMA_TableList", _dbOpenOrCreateCfg);
+	    
+	    // Instanciate Create*Queues
+	    createColumnQueue = new LinkedList<ColumnCreateData>();
+	    createPKQueue = new LinkedList<PKCreateData>();
+	    createFKQueue = new LinkedList<FKCreateData>();
+	    
 	}
 	 
 	public static MyInterpreter getInstance() {
@@ -47,7 +58,8 @@ public class MyInterpreter {
 		return _instance;
 	}
 	
-	public boolean createTable() {
+	// Top-level interpret methods
+	public boolean createTable(String tableName) {
 		// TODO implement proper routine handling 'create table'
 		return false;
 	}
@@ -67,4 +79,34 @@ public class MyInterpreter {
 		return false;
 	}
 	
+	// Intermediate nested classes used in interpreting routine
+	private class ColumnCreateData {
+		public String columnName;
+		public DBType columnType;
+		public ColumnCreateData(String colName, String typeStr, int typeVal) {
+			columnName = colName;
+			if(typeStr.equals("char"))
+				columnType = new DBType(typeStr, typeVal);
+			else
+				columnType = new DBType(typeStr);
+		}
+	}
+	
+	private class PKCreateData {
+		public ArrayList<String> columnList;
+		public PKCreateData(ArrayList<String> colList) {
+			columnList = new ArrayList<String>(colList);
+		}
+	}
+	
+	private class FKCreateData {
+		public ArrayList<String> refingColumnList;
+		public String refedTableName;
+		public ArrayList<String> refedColumnList;
+		public FKCreateData(ArrayList<String> refingColList, String refedTbName, ArrayList<String> refedColList) {
+			refingColumnList = new ArrayList<String>(refingColList);
+			refedTableName = refedTbName;
+			refedColumnList = new ArrayList<String>(refedColList);
+		}
+	}
 }
