@@ -109,4 +109,26 @@ public class MyInterpreter {
 			refedColumnList = new ArrayList<String>(refedColList);
 		}
 	}
+	
+	// Additional public methods for CREATE TABLE
+	public void createTable_Initialize(){
+		createColumnQueue.clear();
+		createPKQueue.clear();
+		createFKQueue.clear();
+	}
+	
+	public void createTable_EnqueueColumn(String colName, String typeStr, int typeVal) {
+		ColumnCreateData col = new ColumnCreateData(colName, typeStr, typeVal);
+		createColumnQueue.add(col);
+	}
+	
+	public void createTable_EnqueuePK(ArrayList<String> colList) {
+		PKCreateData pk = new PKCreateData(colList);
+		createPKQueue.add(pk);
+	}
+	
+	public void createTable_EnqueueFK(ArrayList<String> refingColList, String refedTbName, ArrayList<String> refedColList) {
+		FKCreateData fk = new FKCreateData(refingColList, refedTbName, refedColList);
+		createFKQueue.add(fk);
+	}
 }
