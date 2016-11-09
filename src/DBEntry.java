@@ -21,13 +21,15 @@ class ColumnListDBEntry implements Serializable {
 	
 	public String columnName;
 	public DBType columnType;
+	public int columnIndex;
 	public boolean nullable;
 	public boolean primaryKey;
 	public boolean foreignKey;
 	
-	public ColumnListDBEntry(String colName, DBType colType, boolean nullFlag, boolean pkFlag, boolean fkFlag) {
+	public ColumnListDBEntry(String colName, DBType colType, int colIndex, boolean nullFlag, boolean pkFlag, boolean fkFlag) {
 		columnName = colName;
 		columnType = new DBType(colType);
+		columnIndex = colIndex;
 		nullable = nullFlag;
 		primaryKey = pkFlag;
 		foreignKey = fkFlag;

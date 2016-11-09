@@ -50,4 +50,20 @@ public class DBType implements Serializable {
 				return "TypeError";
 		}
 	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		DBType other = (DBType) obj;
+		if (type != other.type)
+			return false;
+		if (type == DBTypeSpecifier.DB_CHAR && length != other.length) // length only matters when this is char
+			return false;
+		return true;
+	}
 }

@@ -1,11 +1,22 @@
 // imports
 /* BerkelyDB classes */
+import java.io.ByteArrayInputStream;
+import java.io.ByteArrayOutputStream;
 import java.io.File;
+import java.io.IOException;
+import java.io.ObjectInputStream;
+import java.io.ObjectOutputStream;
+import java.io.Serializable;
+import java.io.UnsupportedEncodingException;
 import java.util.*;
 
 import com.sleepycat.je.Database;
 import com.sleepycat.je.DatabaseException;
+import com.sleepycat.je.DatabaseEntry;
 import com.sleepycat.je.DatabaseConfig;
+import com.sleepycat.je.DatabaseNotFoundException;
+import com.sleepycat.je.LockMode;
+import com.sleepycat.je.OperationStatus;
 import com.sleepycat.je.Cursor;
 import com.sleepycat.je.Environment;
 import com.sleepycat.je.EnvironmentConfig;
@@ -15,7 +26,6 @@ public class MyInterpreter {
 	private static MyInterpreter _instance;
 	
 	public Environment myDBEnv;
-	public Database tableListDB;
 	
 	private static DatabaseConfig _dbOpenOrCreateCfg;
 	private static DatabaseConfig _dbCreateOnlyCfg;
@@ -42,9 +52,6 @@ public class MyInterpreter {
 	    envConfig.setAllowCreate(true);
 	    myDBEnv = new Environment(new File("db/"), envConfig);
 	    
-	    // Open Table List Database or if not exists, create one.
-	    tableListDB = myDBEnv.openDatabase(null, "SCHEMA_TableList", _dbOpenOrCreateCfg);
-	    
 	    // Instanciate Create*Queues
 	    createColumnQueue = new LinkedList<ColumnCreateData>();
 	    createPKQueue = new LinkedList<PKCreateData>();
@@ -59,24 +66,212 @@ public class MyInterpreter {
 	}
 	
 	// Top-level interpret methods
-	public boolean createTable(String tableName) {
-		// TODO implement proper routine handling 'create table'
-		return false;
+	public void createTable(String tableName) throws DBError {
+		// Open SCHEMA_TableList for CREATE TABLE
+		Database tableListDB = myDBEnv.openDatabase(null, "SCHEMA_TableList", _dbOpenOrCreateCfg);
+		try {
+			DatabaseEntry newTableName = new DatabaseEntry(tableName.getBytes("UTF-8"));
+			DatabaseEntry tmp = new DatabaseEntry(); // used for membership test with Database.get()
+			
+			HashMap<String, ColumnCreateData> columnMap = new HashMap<>(); // Stores column name and its ColumnCreateData;
+			
+			// Validation 1 - Check TableExistenceError
+			if(tableListDB.get(null, newTableName, tmp, LockMode.DEFAULT) == OperationStatus.SUCCESS) {
+				throw new TableExistenceError();				
+			}
+			
+			// Validation 2 - Check DuplicateColumnDefError & CharLengthError
+			for(ColumnCreateData cd : createColumnQueue) {
+				if(columnMap.containsKey(cd.columnName))
+					throw new DuplicateColumnDefError();
+				if(cd.columnType.type == DBType.DBTypeSpecifier.DB_CHAR && cd.columnType.length < 1)
+					throw new CharLengthError();
+				columnMap.put(cd.columnName, cd); // For Later use
+			}
+			
+			// Validation 3 - Check DuplicatePrimaryKeyDefError
+			if(createPKQueue.size() > 1)
+				throw new DuplicatePrimaryKeyDefError();
+			
+			// Validation 4 - Check NonExistingColumnDefError for PK Definition
+			if(createPKQueue.size() == 1) {
+				PKCreateData pkd = createPKQueue.get(0);
+				for(String col : pkd.columnList) {
+					if(!columnMap.containsKey(col))
+						throw new NonExistingColumnDefError(col);
+				}
+			}
+			
+			// Validation 5 ~ 9 - About foreign keys
+			int idx = 0;
+			for(FKCreateData fkd : createFKQueue) {
+				// Validation 5 - Check NonExistingColumnDefError for FK Definition & DuplicateForeignKeyDefError
+				for(String col : fkd.refingColumnList) {
+					if(!columnMap.containsKey(col))
+						throw new NonExistingColumnDefError(col);
+				}
+				for(int i = 0; i < idx; i++) {
+					boolean sameFK = true;
+					FKCreateData prevFK = createFKQueue.get(i);
+					if(fkd.refingColumnList.size() != prevFK.refingColumnList.size()) continue;
+					for(String col : fkd.refingColumnList) {
+						sameFK = sameFK && prevFK.refingColumnList.contains(col);
+						// if prevFK's referencing column list doesn't contain a col, then sameFK must be false in the end.
+					}
+					
+					if(sameFK) 
+						throw new DuplicateForeignKeyDefError();
+				}
+				
+				// Validation 6 - Check ReferenceTableExistenceError & ReferenceOwnTableError
+				if(fkd.refedTableName.equals(tableName))
+					throw new ReferenceOwnTableError();
+				DatabaseEntry refedTableNameKey = new DatabaseEntry(fkd.refedTableName.getBytes("UTF-8"));
+				if(tableListDB.get(null, refedTableNameKey, tmp, LockMode.DEFAULT) == OperationStatus.NOTFOUND)
+					throw new ReferenceTableExistenceError();
+				
+				// Validation 7 ~ 9 - Check ReferenceColumnExistenceError, ReferenceNonPrimaryKeyError, ReferenceTypeError
+				try {
+					Database refedTableColumnDB = myDBEnv.openDatabase(null, "SCHEMA_COLUMN_"+fkd.refedTableName, _dbOpenOnlyCfg);
+					
+					// Validation 7 - Check ReferenceColumnExistenceError
+					for(String col : fkd.refedColumnList) {
+						DatabaseEntry fkColNameKey = new DatabaseEntry(col.getBytes("UTF-8"));
+						if(refedTableColumnDB.get(null, fkColNameKey, tmp, LockMode.DEFAULT) == OperationStatus.NOTFOUND)
+							throw new ReferenceColumnExistenceError();
+					}
+					
+					// Validation 8 - Check ReferenceNonPrimaryKeyError
+					DatabaseEntry resultData = new DatabaseEntry();
+					if(tableListDB.get(null, refedTableNameKey, resultData, LockMode.DEFAULT) == OperationStatus.SUCCESS) {
+						TableListDBEntry refedTableData = (TableListDBEntry)MyInterpreter.fromBytes(resultData.getData());
+						if(fkd.refedColumnList.size() != refedTableData.pkColumnList.size())
+							throw new ReferenceNonPrimaryKeyError();
+						for(String col : fkd.refedColumnList) {
+							if(!refedTableData.pkColumnList.contains(col))
+								throw new ReferenceNonPrimaryKeyError();
+						}
+					}
+					else {
+						throw new RuntimeException("Referenced table schema in SCHEMA_TableList access failed!!");
+					}
+					
+					// Validation 9 - Check ReferenceTypeError
+					if(fkd.refingColumnList.size() != fkd.refedColumnList.size())
+						throw new ReferenceTypeError();
+					for(int i = 0 ; i < fkd.refingColumnList.size(); i++) {
+						DBType refingColType = columnMap.get((fkd.refingColumnList.get(i))).columnType;
+						DBType refedColType;
+						
+						DatabaseEntry fkColNameKey = new DatabaseEntry(fkd.refedColumnList.get(i).getBytes("UTF-8"));
+						if(refedTableColumnDB.get(null, fkColNameKey, resultData, LockMode.DEFAULT) == OperationStatus.SUCCESS) {
+							ColumnListDBEntry refedColData = (ColumnListDBEntry)MyInterpreter.fromBytes(resultData.getData());
+							refedColType = refedColData.columnType;
+							if(!refingColType.equals(refedColType))
+								throw new ReferenceTypeError();
+						}
+						else {
+							throw new RuntimeException("Referenced column schema in SCHEMA_COLUMN_" + fkd.refedTableName + " access failed!!");
+						}
+					}
+					
+					refedTableColumnDB.close();
+				}
+				catch(DatabaseNotFoundException e) {
+					// if referenced table's column database is not exist
+					// in normal situation, this will not happen
+					throw new ReferenceColumnExistenceError(); 			
+				}
+				idx++;
+			}
+			
+			// If code reaches here, then there is no problem to create this table!
+			ArrayList<String> pkColList;
+			if(createPKQueue.size() == 1)
+				pkColList = createPKQueue.get(0).columnList;
+			else
+				pkColList = new ArrayList<String>();
+			
+			TableListDBEntry tableEntry = new TableListDBEntry(tableName, pkColList);
+			
+			// Force not null constraint to pk columns
+			for (String col : pkColList) {
+				columnMap.get(col).notNull = true;
+			}
+			
+			// Insert table entry in SCHEMA_TableList DB.
+			DatabaseEntry newTableEntry = new DatabaseEntry(MyInterpreter.toBytes(tableEntry));
+			if(tableListDB.put(null, newTableName, newTableEntry) != OperationStatus.SUCCESS) {
+				throw new RuntimeException("Inserting the new table entry in SCHEMA_TableList failed!!");
+			}
+			
+			// Make a set which contains columns attending in a foreign key.
+			HashSet<String> fkColumnSet = new HashSet<>();
+			for(FKCreateData fk : createFKQueue) {
+				for(String col : fk.refingColumnList)
+					fkColumnSet.add(col);
+			}
+			
+			// Insert Columns in SCHEMA_COLUMN_<table name> DB
+			Database newColumnDB = myDBEnv.openDatabase(null, "SCHEMA_COLUMN_" + tableName, _dbCreateOnlyCfg);
+			int colIdx = 0;
+			while(createColumnQueue.size() > 0) {
+				ColumnCreateData newCol = createColumnQueue.poll();
+				ColumnListDBEntry newColDBEntry = new ColumnListDBEntry(newCol.columnName, newCol.columnType, colIdx, !newCol.notNull, pkColList.contains(newCol.columnName), fkColumnSet.contains(newCol.columnName));
+				DatabaseEntry newColNameKey = new DatabaseEntry(newCol.columnName.getBytes("UTF-8"));
+				DatabaseEntry newColEntry = new DatabaseEntry(MyInterpreter.toBytes(newColDBEntry));
+				if(newColumnDB.put(null, newColNameKey, newColEntry) != OperationStatus.SUCCESS) {
+					throw new RuntimeException("Inserting the new column entry in SCHEMA_COLUMN_" + tableName + " failed!!");
+				}
+				colIdx++;
+			}
+			newColumnDB.close();
+			
+			// Insert Foreign Keys in SCHEMA_FOREIGNKEY_<table name> DB
+			Database newForeignKeyDB = myDBEnv.openDatabase(null, "SCHEMA_FOREIGNKEY_" + tableName, _dbCreateOnlyCfg);
+			while(createFKQueue.size() > 0) {
+				FKCreateData newFk = createFKQueue.poll();
+				ForeignKeyListDBEntry newFkDBEntry = new ForeignKeyListDBEntry(newFk.refingColumnList, newFk.refedTableName, newFk.refedColumnList);
+				DatabaseEntry newFkRefingKey = new DatabaseEntry(MyInterpreter.toBytes(newFk.refingColumnList));
+				DatabaseEntry newFkEntry = new DatabaseEntry(MyInterpreter.toBytes(newFkDBEntry));
+				if(newForeignKeyDB.put(null, newFkRefingKey, newFkEntry) != OperationStatus.SUCCESS) {
+					throw new RuntimeException("Inserting the new foreign key entry in SCHEMA_FOREIGNKEY_" + tableName + " failed!!");
+				}
+				
+				// Update the refCount in tableListDB
+				DatabaseEntry refedTableNameKey = new DatabaseEntry(newFk.refedTableName.getBytes("UTF-8"));
+				DatabaseEntry refedTableEntry = new DatabaseEntry();
+				if(tableListDB.get(null, refedTableNameKey, refedTableEntry, LockMode.DEFAULT) != OperationStatus.SUCCESS) {
+					throw new RuntimeException("Accessing the referenced table entry in SCHEMA_TableList failed!!");
+				}
+				TableListDBEntry refedTableDBEntry = (TableListDBEntry)MyInterpreter.fromBytes(refedTableEntry.getData());
+				tableListDB.delete(null, refedTableNameKey);
+				refedTableDBEntry.refCount++;
+				refedTableEntry = new DatabaseEntry(MyInterpreter.toBytes(refedTableDBEntry));
+				if(tableListDB.put(null, refedTableNameKey, refedTableEntry) != OperationStatus.SUCCESS) {
+					throw new RuntimeException("Updating the referenced table entry in SCHEMA_TableList failed!!");
+				}
+			}
+			newForeignKeyDB.close();
+		}
+		catch (DBError e) {
+			throw e;
+		}
+		catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+		}
 	}
 	
-	public boolean dropTable() {
+	public void dropTable() {
 		// TODO implement proper routine handling 'drop table'
-		return false;
 	}
 	
-	public boolean desc() {
+	public void desc() {
 		// TODO implement proper routine handling 'desc'
-		return false;
 	}
 	
-	public boolean showTables() {
+	public void showTables() {
 		// TODO implement proper routine handling 'show tables'
-		return false;
 	}
 	
 	// Intermediate nested classes used in interpreting routine
@@ -132,5 +327,38 @@ public class MyInterpreter {
 	public void createTable_EnqueueFK(ArrayList<String> refingColList, String refedTbName, ArrayList<String> refedColList) {
 		FKCreateData fk = new FKCreateData(refingColList, refedTbName, refedColList);
 		createFKQueue.add(fk);
+	}
+	
+	public static byte[] toBytes(Serializable o) {
+		try {
+			ByteArrayOutputStream bOut = new ByteArrayOutputStream();
+			ObjectOutputStream out = new ObjectOutputStream(bOut);
+			out.writeObject(o);
+			return bOut.toByteArray();
+		}
+		catch (IOException e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+	
+	public static Object fromBytes(byte[] ba) {
+		try {
+			ByteArrayInputStream bIn = new ByteArrayInputStream(ba);
+			ObjectInputStream in = new ObjectInputStream(bIn);
+			return in.readObject();
+		}
+		catch (ClassNotFoundException e) {
+			e.printStackTrace();
+			return null;
+		}
+		catch (IOException e) {
+			e.printStackTrace();
+			return null;
+		}
+	}
+	
+	public void terminate() {
+		if(myDBEnv != null) myDBEnv.close();
 	}
 }
