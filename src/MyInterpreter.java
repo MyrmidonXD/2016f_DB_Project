@@ -185,7 +185,7 @@ public class MyInterpreter {
 				idx++;
 			}
 			
-			// If code reaches here, then there is no problem to create this table!
+			// ----- If code reaches here, then there is no problem to create this table! -----------------------------------------
 			ArrayList<String> pkColList;
 			if(createPKQueue.size() == 1)
 				pkColList = createPKQueue.get(0).columnList;
@@ -325,8 +325,43 @@ public class MyInterpreter {
 		}
 	}
 	
-	public void desc() {
-		// TODO implement proper routine handling 'desc'
+	public void desc(String tableName) throws DBError {
+		Database columnDB;
+		try {
+			 columnDB = myDBEnv.openDatabase(null, "SCHEMA_COLUMN_"+tableName, _dbOpenOnlyCfg);
+			 DatabaseEntry foundKey = new DatabaseEntry();
+			 DatabaseEntry foundData = new DatabaseEntry();
+			 
+			 Cursor colCursor = columnDB.openCursor(null, null);
+			 
+			 colCursor.getFirst(foundKey, foundData, LockMode.DEFAULT);
+			 
+			 System.out.println("-------------------------------------------------");
+			 System.out.println("table_name [" + tableName + "]");
+			 System.out.printf("%-25s%-15s%-15s%-15s\n", "column_name", "type", "null", "key");
+			 
+			 do {
+				 ColumnListDBEntry colDBEntry = (ColumnListDBEntry)MyInterpreter.fromBytes(foundData.getData());
+				 String isNullable = (colDBEntry.nullable) ? "Y" : "N";
+				 String keyType = "";
+				 if(colDBEntry.primaryKey) {
+					 if(colDBEntry.foreignKey) keyType = "PRI/FOR";
+					 else keyType = "PRI";
+				 }
+				 else if(colDBEntry.foreignKey) keyType = "FOR";
+				 
+				 System.out.printf("%-25s%-15s%-15s%-15s\n", colDBEntry.columnName, colDBEntry.columnType.toString(), isNullable, keyType);
+			 }
+			 while(colCursor.getNext(foundKey, foundData, LockMode.DEFAULT) == OperationStatus.SUCCESS);
+			 
+			 System.out.println("-------------------------------------------------");
+			 
+			 colCursor.close();
+			 columnDB.close();
+		}
+		catch(DatabaseNotFoundException e) {
+			throw new NoSuchTable();
+		}
 	}
 	
 	public void showTables() {
