@@ -267,8 +267,62 @@ public class MyInterpreter {
 		}
 	}
 	
-	public void dropTable() {
-		// TODO implement proper routine handling 'drop table'
+	public void dropTable(String tableName) throws DBError {
+		Database tableListDB = myDBEnv.openDatabase(null, "SCHEMA_TableList", _dbOpenOrCreateCfg);
+		try {
+			DatabaseEntry tableNameKey = new DatabaseEntry(tableName.getBytes("UTF-8"));
+			DatabaseEntry tableDBEntry = new DatabaseEntry();
+			
+			if(tableListDB.get(null, tableNameKey, tableDBEntry, LockMode.DEFAULT) == OperationStatus.NOTFOUND) {
+				throw new NoSuchTable();
+			}
+			
+			TableListDBEntry tableEntry = (TableListDBEntry)MyInterpreter.fromBytes(tableDBEntry.getData());
+			if(tableEntry.refCount > 0) {
+				throw new DropReferencedTableError(tableName);
+			}
+			
+			// Decreasing tables' refCount referecned by this table 
+			Database tableForeignKeyDB = myDBEnv.openDatabase(null, "SCHEMA_FOREIGNKEY_"+tableName, _dbOpenOnlyCfg);
+			DatabaseEntry foundKey = new DatabaseEntry();
+			DatabaseEntry foundData = new DatabaseEntry();
+			Cursor fkcursor = tableForeignKeyDB.openCursor(null, null);
+			
+			fkcursor.getFirst(foundKey, foundData, LockMode.DEFAULT);
+			
+			if(tableForeignKeyDB.count() > 0) {
+				do {
+					FKCreateData fkd = (FKCreateData)MyInterpreter.fromBytes(foundData.getData());
+					DatabaseEntry refedTableNameKey = new DatabaseEntry(fkd.refedTableName.getBytes("UTF-8"));
+					DatabaseEntry refedTableDBEntry = new DatabaseEntry();
+					
+					tableListDB.get(null, refedTableNameKey, refedTableDBEntry, LockMode.DEFAULT);
+					TableListDBEntry refedTableEntry = (TableListDBEntry)MyInterpreter.fromBytes(refedTableDBEntry.getData());
+					refedTableEntry.refCount--;
+					tableListDB.delete(null, refedTableNameKey);
+					refedTableDBEntry = new DatabaseEntry(MyInterpreter.toBytes(refedTableEntry));
+					tableListDB.put(null, refedTableNameKey, refedTableDBEntry);
+				}
+				while(fkcursor.getNext(foundKey, foundData, LockMode.DEFAULT) == OperationStatus.SUCCESS);
+			}
+			
+			fkcursor.close();
+			tableForeignKeyDB.close();
+			tableListDB.delete(null, tableNameKey);
+			myDBEnv.removeDatabase(null, "SCHEMA_COLUMN_"+tableName);
+			myDBEnv.removeDatabase(null, "SCHEMA_FOREIGNKEY_"+tableName);
+			
+			System.out.println("\'"+tableName+"\' table is dropped");
+		}
+		catch(DBError e) {
+			throw e;
+		}
+		catch(UnsupportedEncodingException e) {
+			e.printStackTrace();
+		}
+		finally {
+			tableListDB.close();
+		}
 	}
 	
 	public void desc() {

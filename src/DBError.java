@@ -65,6 +65,12 @@ class ShowTablesNoTable extends DBError {
 	}
 }
 
+class NoSuchTable extends DBError {
+	public NoSuchTable() {
+		super("No such table");
+	}
+}
+
 class CharLengthError extends DBError {
 	public CharLengthError() {
 		super("Char length should be over 0");
