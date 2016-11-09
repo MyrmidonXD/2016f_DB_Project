@@ -364,8 +364,40 @@ public class MyInterpreter {
 		}
 	}
 	
-	public void showTables() {
-		// TODO implement proper routine handling 'show tables'
+	public void showTables() throws DBError{
+		Database tableListDB = myDBEnv.openDatabase(null, "SCHEMA_TableList", _dbOpenOrCreateCfg);
+		try {
+			if(tableListDB.count() <= 0)
+				throw new ShowTablesNoTable();
+			
+			DatabaseEntry foundKey = new DatabaseEntry();
+			DatabaseEntry foundData = new DatabaseEntry();
+			 
+			Cursor tableCursor = tableListDB.openCursor(null, null);
+			 
+			tableCursor.getFirst(foundKey, foundData, LockMode.DEFAULT);
+			
+			System.out.println("----------------");
+			
+			do {
+				 String tableName = new String(foundKey.getData(), "UTF-8");
+				 System.out.println(tableName);
+			}
+			while(tableCursor.getNext(foundKey, foundData, LockMode.DEFAULT) == OperationStatus.SUCCESS);
+			
+			System.out.println("----------------");
+			
+			tableCursor.close();
+		}
+		catch(DBError e) {
+			throw e;
+		}
+		catch(UnsupportedEncodingException e) {
+			e.printStackTrace();
+		}
+		finally {
+			tableListDB.close();
+		}
 	}
 	
 	// Intermediate nested classes used in interpreting routine
