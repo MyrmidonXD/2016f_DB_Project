@@ -73,7 +73,7 @@ public class MyInterpreter {
 			DatabaseEntry newTableName = new DatabaseEntry(tableName.getBytes("UTF-8"));
 			DatabaseEntry tmp = new DatabaseEntry(); // used for membership test with Database.get()
 			
-			HashMap<String, ColumnCreateData> columnMap = new HashMap<>(); // Stores column name and its ColumnCreateData;
+			HashMap<String, ColumnCreateData> columnMap = new HashMap<String, ColumnCreateData>(); // Stores column name and its ColumnCreateData;
 			
 			// Validation 1 - Check TableExistenceError
 			if(tableListDB.get(null, newTableName, tmp, LockMode.DEFAULT) == OperationStatus.SUCCESS) {
@@ -206,7 +206,7 @@ public class MyInterpreter {
 			}
 			
 			// Make a set which contains columns attending in a foreign key.
-			HashSet<String> fkColumnSet = new HashSet<>();
+			HashSet<String> fkColumnSet = new HashSet<String>();
 			for(FKCreateData fk : createFKQueue) {
 				for(String col : fk.refingColumnList)
 					fkColumnSet.add(col);
@@ -253,11 +253,16 @@ public class MyInterpreter {
 				}
 			}
 			newForeignKeyDB.close();
+			
+			tableListDB.close();
+			System.out.println("\'" + tableName + "\' table is created");
 		}
 		catch (DBError e) {
+			tableListDB.close();
 			throw e;
 		}
 		catch (UnsupportedEncodingException e) {
+			tableListDB.close();
 			e.printStackTrace();
 		}
 	}
