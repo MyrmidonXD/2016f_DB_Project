@@ -3,7 +3,7 @@ import java.io.Serializable;
 public class DBType implements Serializable {
 	private static final long serialVersionUID = -8524409273436817358L;
 
-	public enum DBTypeSpecifier { DB_INT, DB_CHAR, DB_DATE };
+	public enum DBTypeSpecifier { DB_INT, DB_CHAR, DB_DATE, DB_NULL };
 	
 	public DBTypeSpecifier type;
 	public int length; // only used for DB_CHAR
