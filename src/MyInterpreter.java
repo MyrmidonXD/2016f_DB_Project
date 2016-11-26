@@ -137,19 +137,25 @@ public class MyInterpreter {
 					// Validation 7 - Check ReferenceColumnExistenceError
 					for(String col : fkd.refedColumnList) {
 						DatabaseEntry fkColNameKey = new DatabaseEntry(col.getBytes("UTF-8"));
-						if(refedTableColumnDB.get(null, fkColNameKey, tmp, LockMode.DEFAULT) == OperationStatus.NOTFOUND)
+						if(refedTableColumnDB.get(null, fkColNameKey, tmp, LockMode.DEFAULT) == OperationStatus.NOTFOUND) {
+							refedTableColumnDB.close();
 							throw new ReferenceColumnExistenceError();
+						}
 					}
 					
 					// Validation 8 - Check ReferenceNonPrimaryKeyError
 					DatabaseEntry resultData = new DatabaseEntry();
 					if(tableListDB.get(null, refedTableNameKey, resultData, LockMode.DEFAULT) == OperationStatus.SUCCESS) {
 						TableListDBEntry refedTableData = (TableListDBEntry)MyInterpreter.fromBytes(resultData.getData());
-						if(fkd.refedColumnList.size() != refedTableData.pkColumnList.size())
+						if(fkd.refedColumnList.size() != refedTableData.pkColumnList.size()) {
+							refedTableColumnDB.close();
 							throw new ReferenceNonPrimaryKeyError();
+						}
 						for(String col : fkd.refedColumnList) {
-							if(!refedTableData.pkColumnList.contains(col))
+							if(!refedTableData.pkColumnList.contains(col)) {
+								refedTableColumnDB.close();
 								throw new ReferenceNonPrimaryKeyError();
+							}
 						}
 					}
 					else {
@@ -157,8 +163,10 @@ public class MyInterpreter {
 					}
 					
 					// Validation 9 - Check ReferenceTypeError
-					if(fkd.refingColumnList.size() != fkd.refedColumnList.size())
+					if(fkd.refingColumnList.size() != fkd.refedColumnList.size()) {
+						refedTableColumnDB.close();
 						throw new ReferenceTypeError();
+					}
 					for(int i = 0 ; i < fkd.refingColumnList.size(); i++) {
 						DBType refingColType = columnMap.get((fkd.refingColumnList.get(i))).columnType;
 						DBType refedColType;
@@ -167,8 +175,10 @@ public class MyInterpreter {
 						if(refedTableColumnDB.get(null, fkColNameKey, resultData, LockMode.DEFAULT) == OperationStatus.SUCCESS) {
 							ColumnListDBEntry refedColData = (ColumnListDBEntry)MyInterpreter.fromBytes(resultData.getData());
 							refedColType = refedColData.columnType;
-							if(!refingColType.equals(refedColType))
+							if(!refingColType.equals(refedColType)) {
+								refedTableColumnDB.close();
 								throw new ReferenceTypeError();
+							}
 						}
 						else {
 							throw new RuntimeException("Referenced column schema in SCHEMA_COLUMN_" + fkd.refedTableName + " access failed!!");
@@ -182,6 +192,7 @@ public class MyInterpreter {
 					// in normal situation, this will not happen
 					throw new ReferenceColumnExistenceError(); 			
 				}
+
 				idx++;
 			}
 			
@@ -292,8 +303,8 @@ public class MyInterpreter {
 			
 			if(tableForeignKeyDB.count() > 0) {
 				do {
-					FKCreateData fkd = (FKCreateData)MyInterpreter.fromBytes(foundData.getData());
-					DatabaseEntry refedTableNameKey = new DatabaseEntry(fkd.refedTableName.getBytes("UTF-8"));
+					ForeignKeyListDBEntry fkd = (ForeignKeyListDBEntry)MyInterpreter.fromBytes(foundData.getData());
+					DatabaseEntry refedTableNameKey = new DatabaseEntry(fkd.referencedTableName.getBytes("UTF-8"));
 					DatabaseEntry refedTableDBEntry = new DatabaseEntry();
 					
 					tableListDB.get(null, refedTableNameKey, refedTableDBEntry, LockMode.DEFAULT);
