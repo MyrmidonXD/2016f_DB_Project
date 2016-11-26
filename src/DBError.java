@@ -77,7 +77,7 @@ class CharLengthError extends DBError {
 	}
 }
 
-// Custom Exceptions
+// Custom Exceptions for CREATE TABLE
 class DuplicateForeignKeyDefError extends DBError { 
 	// e.g. fk (id, addr) references t(a_id, a_addr), fk (id, addr) references tt(b_id, b_addr)
 	//		=> A foreign key (id, addr) is defined redundantly.
@@ -93,3 +93,77 @@ class ReferenceOwnTableError extends DBError {
 		super("Create table has failed: foreign key references its own table");
 	}
 }
+
+//------------- Proj 1-3 -------------------//
+
+// Insert Error
+class InsertDuplicatePrimaryKeyError extends DBError {
+	public InsertDuplicatePrimaryKeyError() {
+		super("Insertion has failed: Primary key duplication");
+	}
+}
+
+class InsertReferentialIntegrityError extends DBError {
+	public InsertReferentialIntegrityError() {
+		super("Insertion has failed: Referential integrity violation");
+	}
+}
+
+class InsertTypeMismatchError extends DBError {
+	public InsertTypeMismatchError() {
+		super("Insertion has failed: Types are not matched");
+	}
+}
+
+class InsertColumnExistenceError extends DBError {
+	public InsertColumnExistenceError(String colName) {
+		super("Insertion has failed: \'"+ colName + "\' does not exist");
+	}
+}
+
+class InsertColumnNonNullableError extends DBError {
+	public InsertColumnNonNullableError(String colName) {
+		super("Insertion has failed: \'"+ colName + "\' is not nullable");
+	}
+}
+
+// Select Error
+class SelectTableExistenceError extends DBError {
+	public SelectTableExistenceError(String tableName) {
+		super("Selection has failed: \'" + tableName + "\' does not exist");
+	}
+}
+
+class SelectColumnResolveError extends DBError {
+	public SelectColumnResolveError(String tableName) {
+		super("Selection has failed: fail to resolve \'" + tableName + "\'");
+	}
+}
+
+// Where Clause Error
+class WhereIncomparableError extends DBError {
+	public WhereIncomparableError() {
+		super("Where clause try to compare incomparable values");
+	}
+}
+
+class WhereTableNotSpecified extends DBError {
+	public WhereTableNotSpecified() {
+		super("Where clause try to reference tables which are not specified");
+	}
+}
+
+class WhereColumnNotExist extends DBError {
+	public WhereColumnNotExist() {
+		super("Where clause try to reference non existing column");
+	}
+}
+
+class WhereAmbiguousReference extends DBError {
+	public WhereAmbiguousReference() {
+		super("Where clause contains ambiguous reference");
+	}
+}
+
+
+
