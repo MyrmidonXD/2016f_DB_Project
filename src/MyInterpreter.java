@@ -411,6 +411,172 @@ public class MyInterpreter {
 		}
 	}
 	
+	public void insertInto(String tableName, ArrayList<String> colList, ArrayList<DBValue> valList) throws DBError {
+		// Open SCHEMA_TableList for INSERT INTO
+		Database tableListDB = myDBEnv.openDatabase(null, "SCHEMA_TableList", _dbOpenOrCreateCfg);
+		try 
+		{
+			DatabaseEntry tableNameKey = new DatabaseEntry(tableName.getBytes("UTF-8"));
+			DatabaseEntry tableDBEntry = new DatabaseEntry();
+			
+			if(tableListDB.get(null, tableNameKey, tableDBEntry, LockMode.DEFAULT) == OperationStatus.NOTFOUND) {
+				throw new NoSuchTable();
+			}
+			
+			ArrayList<ColumnListDBEntry> colSchema = getColumnSchema(tableName);
+			
+			// Checks the number of columns
+			if(colList.size() == 0) {
+				if(valList.size() != colSchema.size()) throw new InsertTypeMismatchError();
+			}
+			else {
+				if(valList.size() != colList.size()) throw new InsertTypeMismatchError();
+			}
+			
+			// Make a map for column name and its schema
+			HashMap<String, ColumnListDBEntry> colSchemaMap = new HashMap<String, ColumnListDBEntry>();
+			for(ColumnListDBEntry c : colSchema) {
+				colSchemaMap.put(c.columnName, c);
+			}
+			
+			// Make a map for column name and its DBValue (map between colList and valList)
+			HashMap<String, DBValue> colListMap = new HashMap<String, DBValue>();
+			for(int i = 0; i < colList.size(); i++) {
+				String currColName = colList.get(i);
+				if(colListMap.containsKey(currColName) == false && colSchemaMap.containsKey(currColName) == true)
+					colListMap.put(colList.get(i), valList.get(i));
+				else if (colSchemaMap.containsKey(currColName) == false) 
+					throw new InsertColumnExistenceError(currColName);
+				else
+					throw new RuntimeException("Unexpected Error: Column names are duplicated in insert clause!");
+			}
+			
+			// Make a record to be inserted
+			ArrayList<DBValue> record = new ArrayList<DBValue>();
+			if(colList.size() == 0) {
+				record.addAll(valList);
+			}
+			else {
+				for(int i = 0; i < colSchema.size(); i++) {
+					String currColName = colSchema.get(i).columnName;
+					if(colListMap.containsKey(currColName))
+						record.add(colListMap.get(currColName));
+					else
+						record.add(new DBValue()); // Insert NULL for columns not specified in colList.
+				}
+			}
+			
+			// Check the record has some problems
+			
+			// Validation 1. Type Matching & Non Null Constraint
+			for(int i = 0; i < colSchema.size(); i++) {
+				DBValue currValue = record.get(i);
+				ColumnListDBEntry currColumn = colSchema.get(i);
+				
+				if(currColumn.columnType.type != currValue.valueType) {
+					if(currValue.valueType == DBType.DBTypeSpecifier.DB_NULL) {
+						if(currColumn.nullable == false)
+							throw new InsertColumnNonNullableError(currColumn.columnName);
+					}
+					else
+						throw new InsertTypeMismatchError();
+				}
+				
+				// Char type truncate
+				if(currColumn.columnType.type == DBType.DBTypeSpecifier.DB_CHAR) {
+					currValue.trimChar(currColumn.columnType.length);
+				}
+			}
+			
+			// Validation 2. Duplicated Priamry Key
+			ArrayList<DBValue> recordPK = new ArrayList<DBValue>();
+			for(int i = 0; i < colSchema.size(); i++) {
+				ColumnListDBEntry currColumn = colSchema.get(i);
+				if(currColumn.primaryKey) 
+					recordPK.add(record.get(i));
+			}
+			Database targetDB = myDBEnv.openDatabase(null, tableName, _dbOpenOrCreateCfg);
+			if(recordPK.size() > 0) {
+				DatabaseEntry pkKey = new DatabaseEntry(MyInterpreter.toBytes(recordPK));
+				DatabaseEntry foundRecord = new DatabaseEntry();
+				if(targetDB.get(null, pkKey, foundRecord, LockMode.DEFAULT) != OperationStatus.NOTFOUND) {
+					targetDB.close();
+					throw new InsertDuplicatePrimaryKeyError();
+				}
+			}
+			
+			// Validation 3. Referential Integrity
+			ArrayList<ForeignKeyListDBEntry> fkSchema = getFKSchema(tableName);
+			for(ForeignKeyListDBEntry currFK : fkSchema) {
+				ArrayList<ColumnListDBEntry> refedTableColSchema = getColumnSchema(currFK.referencedTableName);
+				
+				// Extract foreign key from current record (in the order that appers in referenced table)
+				ArrayList<DBValue> currRecordFK = new ArrayList<DBValue>();
+				for(ColumnListDBEntry currCol : refedTableColSchema) {
+					int fkIdx = currFK.referencedColList.indexOf(currCol.columnName);
+					if(fkIdx != -1) {
+						int recordColIdx = colSchemaMap.get(currFK.referencingColList.get(fkIdx)).columnIndex;
+						currRecordFK.add(record.get(recordColIdx));
+					}
+				}
+				
+				// Checks if this FK of current record has a null value (-> always met referential integrity for this FK)
+				boolean hasNull = false;
+				for(DBValue v : currRecordFK) 
+					if(v.isNull()) {
+						hasNull = true;
+						break;
+					}
+				if(hasNull) continue; // Move to the next FK
+				
+				// Checks if this FK of current record is in the referenced table
+				Database refedTable = myDBEnv.openDatabase(null, currFK.referencedTableName, _dbOpenOrCreateCfg);
+				DatabaseEntry fkKey = new DatabaseEntry(MyInterpreter.recordToBDBString(currRecordFK).getBytes("UTF-8"));
+				DatabaseEntry foundRecord = new DatabaseEntry();
+				
+				if(refedTable.get(null, fkKey, foundRecord, LockMode.DEFAULT) == OperationStatus.NOTFOUND) {
+					refedTable.close();
+					throw new InsertReferentialIntegrityError();
+				}
+				
+				refedTable.close();
+			}
+			
+			// ----- If code reaches here, then there is no problem to insert the record! ---------------------------------- 
+			// Insert the record to the BDB
+			DatabaseEntry recordKey;
+			DatabaseEntry recordData = new DatabaseEntry(MyInterpreter.toBytes(record));
+			
+			if(recordPK.size() == 0) { // If this table has no primary key 
+				recordKey = new DatabaseEntry(UUID.randomUUID().toString().getBytes("UTF-8")); // Use Random-Generated UUID for BDB Key
+				while(targetDB.putNoOverwrite(null, recordKey, recordData) == OperationStatus.KEYEXIST ) {
+					recordKey = new DatabaseEntry(UUID.randomUUID().toString().getBytes("UTF-8")); // If conflict occurs, then generate a new key until no conflict occurs. 
+				}
+			}
+			else {
+				recordKey = new DatabaseEntry(MyInterpreter.recordToBDBString(recordPK).getBytes("UTF-8")); // Use PK(converted to string) of the record for BDB Key
+				if(targetDB.put(null, recordKey, recordData) != OperationStatus.SUCCESS) {
+					targetDB.close();
+					throw new RuntimeException("Insertion failed for unexpected reason!!");
+				}
+			}
+			System.out.println("The row is inserted");
+			targetDB.close();
+		}
+		catch(DBError e)
+		{
+			throw e;
+		}
+		catch(UnsupportedEncodingException e)
+		{
+			e.printStackTrace();
+		}
+		finally
+		{
+			tableListDB.close();
+		}
+	}
+	
 	// Intermediate nested classes used in interpreting routine
 	private class ColumnCreateData {
 		public String columnName;
@@ -464,6 +630,82 @@ public class MyInterpreter {
 	public void createTable_EnqueueFK(ArrayList<String> refingColList, String refedTbName, ArrayList<String> refedColList) {
 		FKCreateData fk = new FKCreateData(refingColList, refedTbName, refedColList);
 		createFKQueue.add(fk);
+	}
+	
+	// Additional public methods for INSERT / DELETE / SELECT
+	public ArrayList<ColumnListDBEntry> getColumnSchema(String tableName) {
+		Database colSchemaDB = myDBEnv.openDatabase(null, "SCHEMA_COLUMN_" + tableName, _dbOpenOnlyCfg);
+		Cursor colCursor = colSchemaDB.openCursor(null, null);
+		ArrayList<ColumnListDBEntry> colSchemaList = new ArrayList<ColumnListDBEntry>();
+		
+		DatabaseEntry foundKey = new DatabaseEntry();
+		DatabaseEntry foundData = new DatabaseEntry();
+		
+		colCursor.getFirst(foundKey, foundData, LockMode.DEFAULT);
+		do {
+			ColumnListDBEntry colSchema = (ColumnListDBEntry)fromBytes(foundData.getData());
+			colSchemaList.add(colSchema.columnIndex, colSchema);
+		} while(colCursor.getNext(foundKey, foundData, LockMode.DEFAULT) == OperationStatus.SUCCESS);
+		
+		colCursor.close();
+		colSchemaDB.close();
+		
+		return colSchemaList;
+	}
+	
+	public ArrayList<ForeignKeyListDBEntry> getFKSchema(String tableName) {
+		Database fkSchemaDB = myDBEnv.openDatabase(null, "SCHEMA_FOREIGNKEY_" + tableName, _dbOpenOnlyCfg);
+		Cursor fkCursor = fkSchemaDB.openCursor(null, null);
+		ArrayList<ForeignKeyListDBEntry> fkSchemaList = new ArrayList<ForeignKeyListDBEntry>();
+		
+		DatabaseEntry foundKey = new DatabaseEntry();
+		DatabaseEntry foundData = new DatabaseEntry();
+		
+		if(fkSchemaDB.count() > 0) {
+			fkCursor.getFirst(foundKey, foundData, LockMode.DEFAULT);
+			do {
+				ForeignKeyListDBEntry fkSchema = (ForeignKeyListDBEntry)fromBytes(foundData.getData());
+				fkSchemaList.add(fkSchema);
+			} while(fkCursor.getNext(foundKey, foundData, LockMode.DEFAULT) == OperationStatus.SUCCESS);
+		}
+		
+		return fkSchemaList;
+	}
+	
+	public static String recordToBDBString(ArrayList<DBValue> record) {
+		String result = "";
+		for(DBValue v : record) {
+			if(v.valueType == DBType.DBTypeSpecifier.DB_CHAR)
+				result +=  ("\"" + v.toString() + "\"");
+			else
+				result += v.toString();
+			
+			result += "\'"; // delimeter for each columns
+		}
+		
+		if(result.length() > 0)
+			result.substring(0, result.length()-1); // deletes last delemeter
+		
+		return result;
+	}
+	
+	public static ArrayList<DBValue> recordFromBDBString(String strBDB){
+		String[] strFields = strBDB.split("\'");
+		ArrayList<DBValue> record = new ArrayList<DBValue>(); 
+		for(String s : strFields) {
+			if(s.startsWith("\"")) // CHAR(n)
+				record.add(new DBValue(s.substring(1, s.length()-1)));
+			else if(s.matches("^([0-9]{4})-([0-9]{2})-([0-9]{2})$")) { // DATE
+				String[] ymd = s.split("-");
+				record.add(new DBValue(Integer.parseInt(ymd[0]), Integer.parseInt(ymd[1]), Integer.parseInt(ymd[2])));
+			}
+			else if(s.equals("NULL")) // NULL
+				record.add(new DBValue());
+			else // INT
+				record.add(new DBValue(Integer.parseInt(s)));	
+		}
+		
+		return record;
 	}
 	
 	public static byte[] toBytes(Serializable o) {

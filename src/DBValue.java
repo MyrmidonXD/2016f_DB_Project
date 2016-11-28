@@ -12,11 +12,15 @@ public class DBValue implements Serializable {
 	public DBValue(int value) {
 		valueType = DBType.DBTypeSpecifier.DB_INT;
 		intVal = value;
+		charVal = null;
+		dateVal = null;
 	}
 	
 	public DBValue(String value) {
 		valueType = DBType.DBTypeSpecifier.DB_CHAR;
 		charVal = value;
+		intVal = 0;
+		dateVal = null;
 	}
 	
 	public DBValue(int year, int month, int date) {
@@ -24,10 +28,15 @@ public class DBValue implements Serializable {
 		dateVal.add(year);
 		dateVal.add(month);
 		dateVal.add(date);
+		intVal = 0;
+		charVal = null;
 	}
 	
 	public DBValue() {
 		valueType = DBType.DBTypeSpecifier.DB_NULL;
+		intVal = 0;
+		charVal = null;
+		dateVal = null;
 	}
 	
 	public void trimChar(int size) {
@@ -38,13 +47,51 @@ public class DBValue implements Serializable {
 	}
 	
 	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result + ((charVal == null) ? 0 : charVal.hashCode());
+		result = prime * result + ((dateVal == null) ? 0 : dateVal.hashCode());
+		result = prime * result + intVal;
+		result = prime * result
+				+ ((valueType == null) ? 0 : valueType.hashCode());
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		DBValue other = (DBValue) obj;
+		if (charVal == null) {
+			if (other.charVal != null)
+				return false;
+		} else if (!charVal.equals(other.charVal))
+			return false;
+		if (dateVal == null) {
+			if (other.dateVal != null)
+				return false;
+		} else if (!dateVal.equals(other.dateVal))
+			return false;
+		if (intVal != other.intVal)
+			return false;
+		if (valueType != other.valueType)
+			return false;
+		return true;
+	}
+
+	@Override
 	public String toString() {
 		if(valueType == DBType.DBTypeSpecifier.DB_INT)
 			return Integer.toString(intVal);
 		else if(valueType == DBType.DBTypeSpecifier.DB_CHAR)
 			return charVal;
 		else if(valueType == DBType.DBTypeSpecifier.DB_DATE)
-			return dateVal.get(0) + "-" + dateVal.get(1) + "-" + dateVal.get(2);
+			return String.format("%04d-%02d-%02d", dateVal.get(0), dateVal.get(1), dateVal.get(2));
 		else
 			return "NULL";
 	}
@@ -172,6 +219,7 @@ public class DBValue implements Serializable {
 		
 		return result;
 	}
+	
 }
 
 enum CompOperator { OP_GT, OP_LT, OP_GE, OP_LE, OP_EQ, OP_NEQ };
