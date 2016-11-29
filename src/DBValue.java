@@ -151,17 +151,17 @@ public class DBValue implements Serializable {
 	private boolean _charCompare(CompOperator op, DBValue other) {
 		switch(op) {
 		case OP_GT:
-			return this.charVal.compareTo(other.charVal) > 0;
+			return (this.charVal.toLowerCase()).compareTo(other.charVal.toLowerCase()) > 0;
 		case OP_LT:
-			return this.charVal.compareTo(other.charVal) < 0;
+			return (this.charVal.toLowerCase()).compareTo(other.charVal.toLowerCase()) < 0;
 		case OP_GE:
-			return this.charVal.compareTo(other.charVal) >= 0;
+			return (this.charVal.toLowerCase()).compareTo(other.charVal.toLowerCase()) >= 0;
 		case OP_LE:
-			return this.charVal.compareTo(other.charVal) <= 0;
+			return (this.charVal.toLowerCase()).compareTo(other.charVal.toLowerCase()) <= 0;
 		case OP_EQ:
-			return this.charVal.compareTo(other.charVal) == 0;
+			return (this.charVal.toLowerCase()).compareTo(other.charVal.toLowerCase()) == 0;
 		case OP_NEQ:
-			return this.charVal.compareTo(other.charVal) != 0;
+			return (this.charVal.toLowerCase()).compareTo(other.charVal.toLowerCase()) != 0;
 		default:
 			return false;
 		}

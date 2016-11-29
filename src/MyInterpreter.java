@@ -27,9 +27,9 @@ public class MyInterpreter {
 	
 	public Environment myDBEnv;
 	
-	private static DatabaseConfig _dbOpenOrCreateCfg;
-	private static DatabaseConfig _dbCreateOnlyCfg;
-	private static DatabaseConfig _dbOpenOnlyCfg;
+	public static DatabaseConfig _dbOpenOrCreateCfg;
+	public static DatabaseConfig _dbCreateOnlyCfg;
+	public static DatabaseConfig _dbOpenOnlyCfg;
 	
 	static {
 		// DatabaseConfigs initiallization.
@@ -45,6 +45,9 @@ public class MyInterpreter {
 	private LinkedList<ColumnCreateData> createColumnQueue;
 	private LinkedList<PKCreateData> createPKQueue;
 	private LinkedList<FKCreateData> createFKQueue;
+	
+	// Exception flag for Select and Delete (Used in parsing stage)
+	private boolean _queryExecutable;
 
 	private MyInterpreter() {
 	    // Open Database Environment or if not exists, create one.
@@ -577,6 +580,97 @@ public class MyInterpreter {
 		}
 	}
 	
+	public void select(ArrayList<String> colList, ArrayList<String> tblList, ArrayList<String> aliasList, FromClause from, BoolTree where) throws DBError {
+		// 1. select절에 있는 칼럼 이름들이 문제가 없는지 (select-from check)
+		// 2. column 이름 출력
+		// 3. record 순회하며 출력 (JoinRecordIterator, BoolTree)
+		
+		ArrayList<String> tableNameList = from.getTableNameList();
+		ArrayList<Integer> selectedColIdxList = new ArrayList<Integer>();
+		ArrayList<ColumnListDBEntry> recordColSchemaList = new ArrayList<ColumnListDBEntry>();
+		
+		for(String tblName : tableNameList) {
+			recordColSchemaList.addAll(getColumnSchema(tblName));
+		}
+		
+		if(colList != null) {
+			for(int i = 0; i < colList.size(); i++) {
+				String tblName = tblList.get(i);
+				String colName = colList.get(i);
+				try {
+					int idx = from.referenceQuery(tblName, colName);
+					selectedColIdxList.add(idx);
+				}
+				catch(WhereAmbiguousReference e) {
+					throw new SelectColumnResolveError(colName);
+				}
+				catch(WhereColumnNotExist e) {
+					throw new SelectColumnResolveError((tblName == null)? colName : tblName + "." + colName);
+				}
+				catch(WhereTableNotSpecified e) {
+					throw new SelectColumnResolveError(tblName + "." + colName);
+				}
+				
+				if(aliasList.get(i) == null) {
+					aliasList.remove(i);
+					aliasList.add(i, colName);
+				}
+			}
+		}
+		else { // 'SELECT *' case
+			int idx = 0;
+			aliasList = new ArrayList<String>();
+			for(ColumnListDBEntry recColSchema : recordColSchemaList) {
+				selectedColIdxList.add(idx);
+				aliasList.add(recColSchema.columnName);
+				idx++;
+			}
+		}
+		
+		ArrayList<Integer> columnWidthList = new ArrayList<Integer>();
+		for(int i = 0; i < selectedColIdxList.size(); i++) {
+			int currColIdx = selectedColIdxList.get(i);
+			int width;
+			DBType currColType = recordColSchemaList.get(currColIdx).columnType;
+			if(currColType.type == DBType.DBTypeSpecifier.DB_INT)
+				width = Math.max(11, aliasList.get(i).length());
+			else if (currColType.type == DBType.DBTypeSpecifier.DB_DATE) 
+				width = Math.max(10, aliasList.get(i).length());
+			else
+				width = Math.max(currColType.length, aliasList.get(i).length());
+			columnWidthList.add(width);
+		}
+		
+		// Print Column Names
+		printHorizontalLine(columnWidthList);
+		String colNameLine = "|";
+		for(int i = 0; i < columnWidthList.size(); i++)
+			colNameLine += String.format(" %-" + columnWidthList.get(i) + "s |", aliasList.get(i));
+		System.out.println(colNameLine);
+		printHorizontalLine(columnWidthList);
+		
+		// Iterate cartesian-producted records and select which evaluates where clause true.
+		ArrayList<DBValue> currRecord;
+		JoinRecordIterator recordItr = new JoinRecordIterator(tableNameList);
+		
+		while(recordItr.hasNext()) {
+			currRecord = recordItr.getNext();
+			boolean evalResult = true;
+			if(where != null)
+				evalResult = (where.evaluate(currRecord) == ThreeValuedLogic.TVL_TRUE) ? true : false;
+			
+			if(evalResult == true) {
+				String recordLine = "|";
+				for(int i = 0; i < columnWidthList.size(); i++)
+					recordLine += String.format(" %-" + columnWidthList.get(i) + "s |", currRecord.get(selectedColIdxList.get(i)));
+				System.out.println(recordLine);
+			}
+		}
+		
+		printHorizontalLine(columnWidthList);
+	}
+	
+	
 	// Intermediate nested classes used in interpreting routine
 	private class ColumnCreateData {
 		public String columnName;
@@ -707,6 +801,30 @@ public class MyInterpreter {
 		
 		return record;
 	}
+	
+	public boolean isExecutable() {
+		return _queryExecutable;
+	}
+	
+	public void initSelDel() {
+		_queryExecutable = true;
+	}
+	
+	public void setExceptionOccured() {
+		_queryExecutable = false;
+	}
+	
+	private void printHorizontalLine(ArrayList<Integer> widthList) {
+		String line = "+";
+		for(Integer width : widthList) {
+			for(int i = 0; i < width+2; i++)
+				line += "-";
+			line += "+";
+		}
+		
+		System.out.println(line);
+	}
+	
 	
 	public static byte[] toBytes(Serializable o) {
 		try {

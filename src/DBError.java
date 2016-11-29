@@ -165,5 +165,15 @@ class WhereAmbiguousReference extends DBError {
 	}
 }
 
+// Custom Exceptions for SELECT
+class SelectNotUniqueTableRepresentative extends DBError {
+	public SelectNotUniqueTableRepresentative(String refName) {
+		// e.g. SELECT * FROM foo, account AS foo, bar WHERE ...;
+		//	    => 'foo' is duplicated.
+		super("Selection has failed: Not unique table/alias \'" + refName + "\' in from clause");
+	}
+
+}
+
 
 
