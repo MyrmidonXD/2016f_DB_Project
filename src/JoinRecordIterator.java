@@ -20,11 +20,10 @@ public class JoinRecordIterator {
 	private ArrayList<Integer> _tableSizeList;
 	private int[] _currTableIdxList;
 	private boolean _isEnd;
-	private boolean _isInitialState;
+	//private boolean _isInitialState;
 
 	public JoinRecordIterator(ArrayList<String> tableNameList) { // tableNameList must be validated first (with FromClause).
 		_isEnd = false;
-		_isInitialState = true;
 		
 		_currTableIdxList = new int[tableNameList.size()];
 		
@@ -44,20 +43,15 @@ public class JoinRecordIterator {
 			_cursorList.add(currCursor);
 			_currTableIdxList[i] = 0; 
 		}
-		
-		_currTableIdxList[tableNameList.size() - 1] = -1; // modify last index to -1 
 	}
 	
 	public void reInit() { // Note. this method must not be called after close() is called.
 		_isEnd = false;
-		_isInitialState = true;
 		
 		for(int i = 0; i < _cursorList.size(); i++) {
 			_cursorList.get(i).getFirst(new DatabaseEntry(), new DatabaseEntry(), LockMode.DEFAULT);
 			_currTableIdxList[i] = 0;
 		}
-		
-		_currTableIdxList[_cursorList.size() - 1] = -1; // modify last index to -1 
 	}
 	
 	public void close() {
@@ -73,30 +67,9 @@ public class JoinRecordIterator {
 	}
 	
 	public ArrayList<DBValue> getNext() {
-		int lastIdx = _cursorList.size() - 1;
-		_currTableIdxList[lastIdx] += 1;
+		if(!hasNext()) return null; // Check whether next record exists.
 		
-		if(!_isInitialState){ // Move cursors to the next combination.
-			for(int i = lastIdx; i >= 0; i--) {
-				if(_currTableIdxList[i] < _tableSizeList.get(i)) {
-					_cursorList.get(i).getNext(new DatabaseEntry(), new DatabaseEntry(), LockMode.DEFAULT);
-					break;
-				}
-				else {
-					if(i > 0) {
-						_currTableIdxList[i] = 0;
-						_currTableIdxList[i-1] += 1;
-						_cursorList.get(i).getFirst(new DatabaseEntry(), new DatabaseEntry(), LockMode.DEFAULT);
-					}
-				}
-			}
-			
-			if(_currTableIdxList[0] >= _tableSizeList.get(0))
-				_isEnd = true;
-		}
-		else
-			_isInitialState = false;
-		
+		// Build the record that the cursor currently points to.
 		ArrayList<DBValue> resultRecord = new ArrayList<DBValue>();
 		for(int i = 0; i < _cursorList.size(); i++) {
 			DatabaseEntry foundKey = new DatabaseEntry();
@@ -111,7 +84,53 @@ public class JoinRecordIterator {
 			resultRecord.addAll(partialRecord);
 		}
 		
+		// Move the cursor to point next record
+		int lastIdx = _cursorList.size() - 1;
+		_currTableIdxList[lastIdx] += 1;
+		for(int i = lastIdx; i >= 0; i--) {
+			if(_currTableIdxList[i] < _tableSizeList.get(i)) {
+				_cursorList.get(i).getNext(new DatabaseEntry(), new DatabaseEntry(), LockMode.DEFAULT);
+				break;
+			}
+			else {
+				if(i > 0) {
+					_currTableIdxList[i] = 0;
+					_currTableIdxList[i-1] += 1;
+					_cursorList.get(i).getFirst(new DatabaseEntry(), new DatabaseEntry(), LockMode.DEFAULT);
+				}
+			}
+		}
+		
+		if(_currTableIdxList[0] >= _tableSizeList.get(0))
+			_isEnd = true;
+		
 		return resultRecord;
+	}
+	
+	public ArrayList<DBValue> getCurrent() { // Only used in DELETE, for the case _dbList.size() == 1
+		if(_dbList.size() != 1) return null;
+		
+		DatabaseEntry foundKey = new DatabaseEntry();
+		DatabaseEntry foundData = new DatabaseEntry();
+		
+		if(_cursorList.get(0).getCurrent(foundKey, foundData, LockMode.DEFAULT) != OperationStatus.SUCCESS) {
+			throw new RuntimeException("Failed to get current record in JoinRecordIterator!!");
+		}
+		
+		ArrayList<DBValue> resultRecord = (ArrayList<DBValue>)MyInterpreter.fromBytes(foundData.getData());
+		
+		return resultRecord;
+	}
+	
+	public void moveNext() { // Only used in DELETE, for the case _dbList.size() == 1
+		if(_dbList.size() != 1) return;
+		
+		_currTableIdxList[0] += 1;
+		if(_currTableIdxList[0] >= _tableSizeList.get(0)) 
+			_isEnd = true;
+		else 
+			_cursorList.get(0).getNext(new DatabaseEntry(), new DatabaseEntry(), LockMode.DEFAULT);
+		
 	}
 	
 	public void removeCurrent() { // Only used in DELETE, for the case _dbList.size() == 1

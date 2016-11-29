@@ -662,12 +662,16 @@ public class MyInterpreter {
 			if(evalResult == true) {
 				String recordLine = "|";
 				for(int i = 0; i < columnWidthList.size(); i++)
-					recordLine += String.format(" %-" + columnWidthList.get(i) + "s |", currRecord.get(selectedColIdxList.get(i)));
+					recordLine += String.format(" %-" + columnWidthList.get(i) + "s |", currRecord.get(selectedColIdxList.get(i)).toString());
 				System.out.println(recordLine);
 			}
 		}
 		
 		printHorizontalLine(columnWidthList);
+	}
+	
+	public void delete(String tableName, BoolTree where) {
+		// TODO
 	}
 	
 	
@@ -731,6 +735,7 @@ public class MyInterpreter {
 		Database colSchemaDB = myDBEnv.openDatabase(null, "SCHEMA_COLUMN_" + tableName, _dbOpenOnlyCfg);
 		Cursor colCursor = colSchemaDB.openCursor(null, null);
 		ArrayList<ColumnListDBEntry> colSchemaList = new ArrayList<ColumnListDBEntry>();
+		HashMap<Integer, ColumnListDBEntry> colSchemaMap = new HashMap<Integer, ColumnListDBEntry>();
 		
 		DatabaseEntry foundKey = new DatabaseEntry();
 		DatabaseEntry foundData = new DatabaseEntry();
@@ -738,11 +743,18 @@ public class MyInterpreter {
 		colCursor.getFirst(foundKey, foundData, LockMode.DEFAULT);
 		do {
 			ColumnListDBEntry colSchema = (ColumnListDBEntry)fromBytes(foundData.getData());
-			colSchemaList.add(colSchema.columnIndex, colSchema);
+			colSchemaMap.put(colSchema.columnIndex, colSchema);
 		} while(colCursor.getNext(foundKey, foundData, LockMode.DEFAULT) == OperationStatus.SUCCESS);
 		
 		colCursor.close();
 		colSchemaDB.close();
+		
+		for(int i = 0; i < colSchemaMap.size(); i++) {
+			ColumnListDBEntry tmp = colSchemaMap.get(i);
+			if(tmp != null) colSchemaList.add(tmp);
+			else
+				throw new NullPointerException(); // In ideal case, this is not possible.
+		}
 		
 		return colSchemaList;
 	}
@@ -764,6 +776,32 @@ public class MyInterpreter {
 		}
 		
 		return fkSchemaList;
+	}
+	
+	public ArrayList<String> getTableList() {
+		Database tableListDB = myDBEnv.openDatabase(null, "SCHEMA_TableList", _dbOpenOnlyCfg);
+		Cursor cursor = tableListDB.openCursor(null, null);
+		ArrayList<String> tableNameList = new ArrayList<String>();
+		
+		try {
+			DatabaseEntry foundKey = new DatabaseEntry();
+			DatabaseEntry foundData = new DatabaseEntry();
+			
+			if(tableListDB.count() > 0) {
+				cursor.getFirst(foundKey, foundData, LockMode.DEFAULT);
+				do {
+					String currTblName = new String(foundKey.getData(), "UTF-8");
+					tableNameList.add(currTblName);
+				} while(cursor.getNext(foundKey, foundData, LockMode.DEFAULT) == OperationStatus.SUCCESS);
+			}
+			
+			return tableNameList;
+		}
+		catch(UnsupportedEncodingException e) {
+			e.printStackTrace();
+			return null;
+		}
+		
 	}
 	
 	public static String recordToBDBString(ArrayList<DBValue> record) {
@@ -823,6 +861,27 @@ public class MyInterpreter {
 		}
 		
 		System.out.println(line);
+	}
+	
+	public boolean delete_tableExistenceCheck(String tableName) throws DBError {
+		Database tableList = myDBEnv.openDatabase(null, "SCHEMA_TableList", MyInterpreter._dbOpenOrCreateCfg);
+		try {
+			DatabaseEntry tblNameKey = new DatabaseEntry(tableName.getBytes("UTF-8"));
+			DatabaseEntry tmp = new DatabaseEntry();
+			
+			if(tableList.get(null, tblNameKey, tmp, LockMode.DEFAULT) != OperationStatus.SUCCESS) {
+				tableList.close();
+				throw new NoSuchTable();
+			}
+			
+			tableList.close();
+			return true;
+		}
+		catch (UnsupportedEncodingException e) {
+			e.printStackTrace();
+			tableList.close();
+			return false;
+		}
 	}
 	
 	
