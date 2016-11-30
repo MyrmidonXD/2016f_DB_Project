@@ -349,22 +349,18 @@ public class MyInterpreter {
 	}
 	
 	public void desc(String tableName) throws DBError {
-		Database columnDB;
+		Database columnDB = null;
 		try {
-			 columnDB = myDBEnv.openDatabase(null, "SCHEMA_COLUMN_"+tableName, _dbOpenOnlyCfg);
-			 DatabaseEntry foundKey = new DatabaseEntry();
-			 DatabaseEntry foundData = new DatabaseEntry();
+			 columnDB = myDBEnv.openDatabase(null, "SCHEMA_COLUMN_"+tableName, _dbOpenOnlyCfg); // Check whether table exists.
+			 columnDB.close();
 			 
-			 Cursor colCursor = columnDB.openCursor(null, null);
-			 
-			 colCursor.getFirst(foundKey, foundData, LockMode.DEFAULT);
+			 ArrayList<ColumnListDBEntry> colSchemaList = getColumnSchema(tableName);
 			 
 			 System.out.println("-------------------------------------------------");
 			 System.out.println("table_name [" + tableName + "]");
 			 System.out.printf("%-25s%-15s%-15s%-15s\n", "column_name", "type", "null", "key");
 			 
-			 do {
-				 ColumnListDBEntry colDBEntry = (ColumnListDBEntry)MyInterpreter.fromBytes(foundData.getData());
+			 for(ColumnListDBEntry colDBEntry : colSchemaList) {
 				 String isNullable = (colDBEntry.nullable) ? "Y" : "N";
 				 String keyType = "";
 				 if(colDBEntry.primaryKey) {
@@ -375,14 +371,13 @@ public class MyInterpreter {
 				 
 				 System.out.printf("%-25s%-15s%-15s%-15s\n", colDBEntry.columnName, colDBEntry.columnType.toString(), isNullable, keyType);
 			 }
-			 while(colCursor.getNext(foundKey, foundData, LockMode.DEFAULT) == OperationStatus.SUCCESS);
-			 
 			 System.out.println("-------------------------------------------------");
 			 
-			 colCursor.close();
-			 columnDB.close();
+
 		}
 		catch(DatabaseNotFoundException e) {
+			if(columnDB != null)
+				columnDB.close();
 			throw new NoSuchTable();
 		}
 	}
