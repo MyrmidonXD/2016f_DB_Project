@@ -48,32 +48,25 @@ class BoolTree {
 		if(_op == BoolTreeOperator.BT_AND) {
 			ThreeValuedLogic leftRes, rightRes;
 			leftRes = _leftChild.evaluate(record);
-			if(leftRes == ThreeValuedLogic.TVL_FALSE)
-				result = ThreeValuedLogic.TVL_FALSE; // Short Circuit Evaluation
-			else {
-				rightRes = _rightChild.evaluate(record);
-				if(rightRes == ThreeValuedLogic.TVL_FALSE)
-					result = ThreeValuedLogic.TVL_FALSE;
-				else if(leftRes == ThreeValuedLogic.TVL_TRUE && rightRes == ThreeValuedLogic.TVL_TRUE)
-					result = ThreeValuedLogic.TVL_TRUE;
-				else
-					result = ThreeValuedLogic.TVL_UNKNOWN;
-			}
+			rightRes = _rightChild.evaluate(record);
+			if(leftRes == ThreeValuedLogic.TVL_FALSE || rightRes == ThreeValuedLogic.TVL_FALSE)
+				result = ThreeValuedLogic.TVL_FALSE;
+			else if(leftRes == ThreeValuedLogic.TVL_TRUE && rightRes == ThreeValuedLogic.TVL_TRUE)
+				result = ThreeValuedLogic.TVL_TRUE;
+			else
+				result = ThreeValuedLogic.TVL_UNKNOWN;
+			
 		}
 		else { // (_op == BoolTreeOperator.BT_OR)
 			ThreeValuedLogic leftRes, rightRes;
 			leftRes = _leftChild.evaluate(record);
-			if(leftRes == ThreeValuedLogic.TVL_TRUE)
-				result = ThreeValuedLogic.TVL_TRUE; // Short Circuit Evaluation
-			else {
-				rightRes = _rightChild.evaluate(record);
-				if(rightRes == ThreeValuedLogic.TVL_TRUE)
-					result = ThreeValuedLogic.TVL_TRUE;
-				else if(leftRes == ThreeValuedLogic.TVL_FALSE && rightRes == ThreeValuedLogic.TVL_FALSE)
-					result = ThreeValuedLogic.TVL_FALSE;
-				else
-					result = ThreeValuedLogic.TVL_UNKNOWN;
-			}
+			rightRes = _rightChild.evaluate(record);
+			if(leftRes == ThreeValuedLogic.TVL_TRUE || rightRes == ThreeValuedLogic.TVL_TRUE)
+				result = ThreeValuedLogic.TVL_TRUE;
+			else if(leftRes == ThreeValuedLogic.TVL_FALSE && rightRes == ThreeValuedLogic.TVL_FALSE)
+				result = ThreeValuedLogic.TVL_FALSE;
+			else
+				result = ThreeValuedLogic.TVL_UNKNOWN;
 		}
 		
 		// NOT negation

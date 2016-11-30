@@ -667,11 +667,83 @@ public class MyInterpreter {
 			}
 		}
 		
+		recordItr.close();
 		printHorizontalLine(columnWidthList);
 	}
 	
-	public void delete(String tableName, BoolTree where) {
-		// TODO
+	public void delete(String tableName, BoolTree where) throws DBError {
+		// 1. where pre-processing
+		// 2. for each records
+		// 3. 	check where clause
+		// 4. 	check deletable w/ RefIntegrityManager
+		// 5. 	cascade delete w/ RefIntegrityManager
+		// 6. 	delete the record
+		
+		// 1. where pre-processing
+		Database table = myDBEnv.openDatabase(null, tableName, _dbOpenOrCreateCfg);
+		Cursor tableCursor = table.openCursor(null, null);
+		DatabaseEntry foundKey = new DatabaseEntry();
+		DatabaseEntry foundData = new DatabaseEntry();
+		try {
+			if(table.count() > 0 && where != null) {
+				tableCursor.getFirst(foundKey, foundData, LockMode.DEFAULT);
+				do {
+					ArrayList<DBValue> currRecord = (ArrayList<DBValue>)MyInterpreter.fromBytes(foundData.getData());
+					where.evaluate(currRecord);
+				} while(tableCursor.getNext(foundKey, foundData, LockMode.DEFAULT) == OperationStatus.SUCCESS);
+			}
+		}
+		catch (DBError e) {
+			tableCursor.close();
+			table.close();
+			throw e;
+		}
+		
+		tableCursor.close();
+		table.close();
+		
+		// 2 ~ 6.
+		ArrayList<String> tableNameContainer = new ArrayList<String>();
+		tableNameContainer.add(tableName);
+		JoinRecordIterator recordIter = new JoinRecordIterator(tableNameContainer);
+		ArrayList<DBValue> currRecord = null;
+		RefIntegrityManager refIntManager = new RefIntegrityManager(tableName);
+		int deletedCount = 0, failedCount = 0;
+		while(recordIter.hasNext()) {
+			currRecord = recordIter.getCurrent();
+			
+			// 3. check where clause
+			boolean evalResult = true;
+			if(where != null)
+				evalResult = (where.evaluate(currRecord) == ThreeValuedLogic.TVL_TRUE) ? true : false;
+			if(!evalResult) {
+				recordIter.moveNext();
+				continue;
+			}
+			
+			// 4. check deletable w/ RefIntegrityManager
+			boolean deletable = refIntManager.checkDeletable(currRecord);
+			if(!deletable) {
+				failedCount++;
+				recordIter.moveNext();
+				continue;
+			}
+			
+			// 5. cascade delete w/ RefIntegrityManager
+			refIntManager.cascadeDelete(currRecord);
+			
+			// 6. delete the record
+			recordIter.removeCurrent();
+			deletedCount++;
+			
+			recordIter.moveNext(); // Move recordIter to point the next record
+		}
+		
+		System.out.println(deletedCount + " row(s) are deleted");
+		if(failedCount > 0)
+			System.out.println(failedCount + " row(s) are not deleted due to referential integrity");
+		
+		recordIter.close();
 	}
 	
 	
