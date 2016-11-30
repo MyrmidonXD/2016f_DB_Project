@@ -323,6 +323,11 @@ public class MyInterpreter {
 			fkcursor.close();
 			tableForeignKeyDB.close();
 			tableListDB.delete(null, tableNameKey);
+			
+			try {
+				myDBEnv.removeDatabase(null, tableName);
+			} catch(DatabaseNotFoundException e) {}
+				
 			myDBEnv.removeDatabase(null, "SCHEMA_COLUMN_"+tableName);
 			myDBEnv.removeDatabase(null, "SCHEMA_FOREIGNKEY_"+tableName);
 			
@@ -847,6 +852,8 @@ public class MyInterpreter {
 			} while(fkCursor.getNext(foundKey, foundData, LockMode.DEFAULT) == OperationStatus.SUCCESS);
 		}
 		
+		fkCursor.close();
+		fkSchemaDB.close();
 		return fkSchemaList;
 	}
 	
@@ -867,9 +874,13 @@ public class MyInterpreter {
 				} while(cursor.getNext(foundKey, foundData, LockMode.DEFAULT) == OperationStatus.SUCCESS);
 			}
 			
+			cursor.close();
+			tableListDB.close();
 			return tableNameList;
 		}
 		catch(UnsupportedEncodingException e) {
+			cursor.close();
+			tableListDB.close();
 			e.printStackTrace();
 			return null;
 		}

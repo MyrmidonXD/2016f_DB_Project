@@ -24,6 +24,9 @@ public class JoinRecordIterator {
 
 	public JoinRecordIterator(ArrayList<String> tableNameList) { // tableNameList must be validated first (with FromClause).
 		_isEnd = false;
+		_dbList = new ArrayList<Database>();
+		_cursorList = new ArrayList<Cursor>();
+		_tableSizeList = new ArrayList<Integer>();
 		
 		_currTableIdxList = new int[tableNameList.size()];
 		
