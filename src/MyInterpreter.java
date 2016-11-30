@@ -586,9 +586,9 @@ public class MyInterpreter {
 	}
 	
 	public void select(ArrayList<String> colList, ArrayList<String> tblList, ArrayList<String> aliasList, FromClause from, BoolTree where) throws DBError {
-		// 1. select절에 있는 칼럼 이름들이 문제가 없는지 (select-from check)
-		// 2. column 이름 출력
-		// 3. record 순회하며 출력 (JoinRecordIterator, BoolTree)
+		// 1. check columns in select clause are resolverable (select-from check)
+		// 2. print names(or alias) of columns
+		// 3. print selected records (JoinRecordIterator, BoolTree)
 		
 		ArrayList<String> tableNameList = from.getTableNameList();
 		ArrayList<Integer> selectedColIdxList = new ArrayList<Integer>();
