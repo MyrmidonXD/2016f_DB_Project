@@ -505,7 +505,7 @@ public class MyInterpreter {
 			}
 			Database targetDB = myDBEnv.openDatabase(null, tableName, _dbOpenOrCreateCfg);
 			if(recordPK.size() > 0) {
-				DatabaseEntry pkKey = new DatabaseEntry(MyInterpreter.toBytes(recordPK));
+				DatabaseEntry pkKey = new DatabaseEntry(MyInterpreter.recordToBDBString(recordPK).getBytes("UTF-8"));
 				DatabaseEntry foundRecord = new DatabaseEntry();
 				if(targetDB.get(null, pkKey, foundRecord, LockMode.DEFAULT) != OperationStatus.NOTFOUND) {
 					targetDB.close();
@@ -650,7 +650,7 @@ public class MyInterpreter {
 		printHorizontalLine(columnWidthList);
 		String colNameLine = "|";
 		for(int i = 0; i < columnWidthList.size(); i++)
-			colNameLine += String.format(" %-" + columnWidthList.get(i) + "s |", aliasList.get(i));
+			colNameLine += String.format(" %-" + columnWidthList.get(i) + "s |", aliasList.get(i).toUpperCase());
 		System.out.println(colNameLine);
 		printHorizontalLine(columnWidthList);
 		
