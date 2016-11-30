@@ -301,27 +301,31 @@ public class MyInterpreter {
 			DatabaseEntry foundKey = new DatabaseEntry();
 			DatabaseEntry foundData = new DatabaseEntry();
 			Cursor fkcursor = tableForeignKeyDB.openCursor(null, null);
-			
-			fkcursor.getFirst(foundKey, foundData, LockMode.DEFAULT);
-			
-			if(tableForeignKeyDB.count() > 0) {
-				do {
-					ForeignKeyListDBEntry fkd = (ForeignKeyListDBEntry)MyInterpreter.fromBytes(foundData.getData());
-					DatabaseEntry refedTableNameKey = new DatabaseEntry(fkd.referencedTableName.getBytes("UTF-8"));
-					DatabaseEntry refedTableDBEntry = new DatabaseEntry();
-					
-					tableListDB.get(null, refedTableNameKey, refedTableDBEntry, LockMode.DEFAULT);
-					TableListDBEntry refedTableEntry = (TableListDBEntry)MyInterpreter.fromBytes(refedTableDBEntry.getData());
-					refedTableEntry.refCount--;
-					tableListDB.delete(null, refedTableNameKey);
-					refedTableDBEntry = new DatabaseEntry(MyInterpreter.toBytes(refedTableEntry));
-					tableListDB.put(null, refedTableNameKey, refedTableDBEntry);
+			try {
+				if(tableForeignKeyDB.count() > 0) {
+					fkcursor.getFirst(foundKey, foundData, LockMode.DEFAULT);
+					do {
+						ForeignKeyListDBEntry fkd = (ForeignKeyListDBEntry)MyInterpreter.fromBytes(foundData.getData());
+						DatabaseEntry refedTableNameKey = new DatabaseEntry(fkd.referencedTableName.getBytes("UTF-8"));
+						DatabaseEntry refedTableDBEntry = new DatabaseEntry();
+						
+						tableListDB.get(null, refedTableNameKey, refedTableDBEntry, LockMode.DEFAULT);
+						TableListDBEntry refedTableEntry = (TableListDBEntry)MyInterpreter.fromBytes(refedTableDBEntry.getData());
+						refedTableEntry.refCount--;
+						tableListDB.delete(null, refedTableNameKey);
+						refedTableDBEntry = new DatabaseEntry(MyInterpreter.toBytes(refedTableEntry));
+						tableListDB.put(null, refedTableNameKey, refedTableDBEntry);
+					}
+					while(fkcursor.getNext(foundKey, foundData, LockMode.DEFAULT) == OperationStatus.SUCCESS);
 				}
-				while(fkcursor.getNext(foundKey, foundData, LockMode.DEFAULT) == OperationStatus.SUCCESS);
 			}
-			
-			fkcursor.close();
-			tableForeignKeyDB.close();
+			catch(Exception e) {
+				throw e;
+			}
+			finally {
+				fkcursor.close();
+				tableForeignKeyDB.close();
+			}
 			tableListDB.delete(null, tableNameKey);
 			
 			try {
@@ -543,6 +547,7 @@ public class MyInterpreter {
 				DatabaseEntry foundRecord = new DatabaseEntry();
 				
 				if(refedTable.get(null, fkKey, foundRecord, LockMode.DEFAULT) == OperationStatus.NOTFOUND) {
+					targetDB.close();
 					refedTable.close();
 					throw new InsertReferentialIntegrityError();
 				}

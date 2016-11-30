@@ -173,46 +173,46 @@ public class DBValue implements Serializable {
 		
 		switch(op) {
 		case OP_GT:
-			result = this.dateVal.get(0) > other.dateVal.get(0);
-			if(this.dateVal.get(0) == other.dateVal.get(0)) {
-				result = this.dateVal.get(1) > other.dateVal.get(1);
-				if(this.dateVal.get(1) == other.dateVal.get(1))
-					result = this.dateVal.get(2) > other.dateVal.get(2);
+			result = this.dateVal.get(0).intValue() > other.dateVal.get(0).intValue();
+			if(this.dateVal.get(0).intValue() == other.dateVal.get(0).intValue()) {
+				result = this.dateVal.get(1).intValue() > other.dateVal.get(1).intValue();
+				if(this.dateVal.get(1).intValue() == other.dateVal.get(1).intValue())
+					result = this.dateVal.get(2).intValue() > other.dateVal.get(2).intValue();
 			}
 			break;
 		case OP_LT:
-			result = this.dateVal.get(0) < other.dateVal.get(0);
-			if(this.dateVal.get(0) == other.dateVal.get(0)) {
-				result = this.dateVal.get(1) < other.dateVal.get(1);
-				if(this.dateVal.get(1) == other.dateVal.get(1))
-					result = this.dateVal.get(2) < other.dateVal.get(2);
+			result = this.dateVal.get(0).intValue() < other.dateVal.get(0).intValue();
+			if(this.dateVal.get(0).intValue() == other.dateVal.get(0).intValue()) {
+				result = this.dateVal.get(1).intValue() < other.dateVal.get(1).intValue();
+				if(this.dateVal.get(1).intValue() == other.dateVal.get(1).intValue())
+					result = this.dateVal.get(2).intValue() < other.dateVal.get(2).intValue();
 			}
 			break;
 		case OP_GE:
-			result = this.dateVal.get(0) > other.dateVal.get(0);
-			if(this.dateVal.get(0) == other.dateVal.get(0)) {
-				result = this.dateVal.get(1) > other.dateVal.get(1);
-				if(this.dateVal.get(1) == other.dateVal.get(1))
-					result = this.dateVal.get(2) >= other.dateVal.get(2);
+			result = this.dateVal.get(0).intValue() > other.dateVal.get(0).intValue();
+			if(this.dateVal.get(0).intValue() == other.dateVal.get(0).intValue()) {
+				result = this.dateVal.get(1).intValue() > other.dateVal.get(1).intValue();
+				if(this.dateVal.get(1).intValue() == other.dateVal.get(1).intValue())
+					result = this.dateVal.get(2).intValue() >= other.dateVal.get(2).intValue();
 			}
 			break;
 		case OP_LE:
-			result = this.dateVal.get(0) < other.dateVal.get(0);
-			if(this.dateVal.get(0) == other.dateVal.get(0)) {
-				result = this.dateVal.get(1) < other.dateVal.get(1);
-				if(this.dateVal.get(1) == other.dateVal.get(1))
-					result = this.dateVal.get(2) <= other.dateVal.get(2);
+			result = this.dateVal.get(0).intValue() < other.dateVal.get(0).intValue();
+			if(this.dateVal.get(0).intValue() == other.dateVal.get(0).intValue()) {
+				result = this.dateVal.get(1).intValue() < other.dateVal.get(1).intValue();
+				if(this.dateVal.get(1).intValue() == other.dateVal.get(1).intValue())
+					result = this.dateVal.get(2).intValue() <= other.dateVal.get(2).intValue();
 			}
 			break;
 		case OP_EQ:
-			result = this.dateVal.get(0) == other.dateVal.get(0);
-			result &= this.dateVal.get(1) == other.dateVal.get(1);
-			result &= this.dateVal.get(2) == other.dateVal.get(2);
+			result = this.dateVal.get(0).intValue() == other.dateVal.get(0).intValue();
+			result = result && (this.dateVal.get(1).intValue() == other.dateVal.get(1).intValue());
+			result = result && (this.dateVal.get(2).intValue() == other.dateVal.get(2).intValue());
 			break;
 		case OP_NEQ:
-			result = this.dateVal.get(0) != other.dateVal.get(0);
-			result |= this.dateVal.get(1) != other.dateVal.get(1);
-			result |= this.dateVal.get(2) != other.dateVal.get(2);
+			result = this.dateVal.get(0).intValue() != other.dateVal.get(0).intValue();
+			result = result || (this.dateVal.get(1).intValue() != other.dateVal.get(1).intValue());
+			result = result || (this.dateVal.get(2).intValue() != other.dateVal.get(2).intValue());
 			break;
 		default:
 			break;
