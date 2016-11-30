@@ -646,6 +646,32 @@ public class MyInterpreter {
 			columnWidthList.add(width);
 		}
 		
+		// Iterate cartesian-producted records and select which evaluates where clause true.
+		ArrayList<String> resultLines = new ArrayList<String>();
+		ArrayList<DBValue> currRecord;
+		JoinRecordIterator recordItr = new JoinRecordIterator(tableNameList);
+		try {
+			while(recordItr.hasNext()) {
+				currRecord = recordItr.getNext();
+				boolean evalResult = true;
+				if(where != null)
+					evalResult = (where.evaluate(currRecord) == ThreeValuedLogic.TVL_TRUE) ? true : false;
+				
+				if(evalResult == true) {
+					String recordLine = "|";
+					for(int i = 0; i < columnWidthList.size(); i++)
+						recordLine += String.format(" %-" + columnWidthList.get(i) + "s |", currRecord.get(selectedColIdxList.get(i)).toString());
+					resultLines.add(recordLine);
+				}
+			}
+		}
+		catch(DBError e) {
+			throw e;
+		}
+		finally {
+			recordItr.close();
+		}
+		
 		// Print Column Names
 		printHorizontalLine(columnWidthList);
 		String colNameLine = "|";
@@ -654,25 +680,10 @@ public class MyInterpreter {
 		System.out.println(colNameLine);
 		printHorizontalLine(columnWidthList);
 		
-		// Iterate cartesian-producted records and select which evaluates where clause true.
-		ArrayList<DBValue> currRecord;
-		JoinRecordIterator recordItr = new JoinRecordIterator(tableNameList);
+		// Print result records
+		for(String line : resultLines)
+			System.out.println(line);
 		
-		while(recordItr.hasNext()) {
-			currRecord = recordItr.getNext();
-			boolean evalResult = true;
-			if(where != null)
-				evalResult = (where.evaluate(currRecord) == ThreeValuedLogic.TVL_TRUE) ? true : false;
-			
-			if(evalResult == true) {
-				String recordLine = "|";
-				for(int i = 0; i < columnWidthList.size(); i++)
-					recordLine += String.format(" %-" + columnWidthList.get(i) + "s |", currRecord.get(selectedColIdxList.get(i)).toString());
-				System.out.println(recordLine);
-			}
-		}
-		
-		recordItr.close();
 		printHorizontalLine(columnWidthList);
 	}
 	
